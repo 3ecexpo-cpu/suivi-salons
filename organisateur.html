@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Suivi salon — Mode organisateur</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: { 50:'#f0fdf4', 100:'#dcfce7', 500:'#16a34a', 600:'#15803d', 700:'#166534' },
+        }
+      }
+    }
+  };
+</script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, Arial, sans-serif; }
+  .tabbtn { padding: .6rem 1rem; border-radius: .5rem; font-weight:500; color:#475569; }
+  .tabbtn.active { background:#0f172a; color:#fff; }
+  .badge { display:inline-flex; align-items:center; padding:.2rem .55rem; border-radius:9999px; font-size:.72rem; font-weight:600; }
+  .b-attente { background:#f1f5f9; color:#475569; }
+  .b-option  { background:#fef3c7; color:#92400e; }
+  .b-promesse{ background:#dbeafe; color:#1d4ed8; }
+  .b-confirm { background:#dcfce7; color:#15803d; }
+  .b-acompte { background:#a7f3d0; color:#065f46; }
+  .b-solde   { background:#99f6e4; color:#115e59; }
+  .b-annule  { background:#fee2e2; color:#b91c1c; }
+  .num { text-align:right; font-variant-numeric: tabular-nums; }
+  thead th { font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:#475569; background:#f8fafc; }
+  tbody tr:hover { background:#f8fafc; }
+  td, th { padding:.55rem .65rem; border-bottom:1px solid #f1f5f9; vertical-align: middle; }
+  table { width:100%; border-collapse: collapse; font-size:.875rem; }
+  .editable:focus { outline: 2px solid #16a34a; outline-offset: -2px; }
+  input.cell, select.cell { width:100%; padding:.35rem .5rem; border:1px solid transparent; border-radius:.35rem; background:transparent; font-size:.875rem; }
+  input.cell:focus, select.cell:focus { border-color:#16a34a; background:#fff; outline:none; }
+  .kpi { background:#fff; border:1px solid #e2e8f0; border-radius:.85rem; padding:1.1rem 1.25rem; }
+  .kpi .label { font-size:.75rem; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
+  .kpi .value { font-size:1.85rem; font-weight:700; color:#0f172a; margin-top:.25rem; }
+  .kpi .sub  { font-size:.78rem; color:#64748b; margin-top:.15rem; }
+  .progress { height:.5rem; background:#e2e8f0; border-radius:9999px; overflow:hidden; }
+  .progress > div { height:100%; background:#16a34a; }
+  .btn { padding:.55rem .9rem; border-radius:.5rem; font-weight:600; font-size:.85rem; }
+  .btn-primary { background:#15803d; color:#fff; }
+  .btn-primary:hover { background:#166534; }
+  .btn-soft { background:#f1f5f9; color:#0f172a; }
+  .btn-soft:hover { background:#e2e8f0; }
+  .btn-danger { background:#fee2e2; color:#b91c1c; }
+  .btn-danger:hover { background:#fecaca; }
+  .btn-ghost { color:#475569; }
+  .btn-ghost:hover { color:#0f172a; background:#f1f5f9; }
+  .modal-bg { background:rgba(15,23,42,.55); }
+  .field label { font-size:.75rem; font-weight:600; color:#475569; display:block; margin-bottom:.25rem; }
+  .field input, .field select, .field textarea {
+    width:100%; padding:.55rem .65rem; border:1px solid #cbd5e1; border-radius:.45rem; font-size:.9rem; background:#fff;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { outline:2px solid #16a34a; outline-offset:-1px; border-color:#16a34a; }
+  details > summary { cursor:pointer; list-style:none; }
+  details > summary::-webkit-details-marker { display:none; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+<header class="bg-white border-b border-slate-200">
+  <div class="max-w-[1500px] mx-auto px-6 py-4 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <a href="index.html" class="btn btn-soft" title="Changer de mode">← Modes</a>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight">Pilotage commercial — <span class="text-emerald-700">Mode organisateur</span></h1>
+        <p class="text-sm text-slate-500">Salon que nous organisons en propre. Commission = Montant HT × Taux.</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="btn btn-soft" onclick="exportJSON()">Exporter</button>
+      <label class="btn btn-soft cursor-pointer">
+        Importer<input type="file" id="importFile" accept="application/json" class="hidden" onchange="importJSON(event)" />
+      </label>
+      <button class="btn btn-soft" onclick="exportCSV()">CSV ventes</button>
+      <button class="btn btn-danger" onclick="confirmReset()">Réinitialiser</button>
+    </div>
+  </div>
+  <nav class="max-w-[1500px] mx-auto px-6 pb-3">
+    <div class="flex gap-1">
+      <button class="tabbtn active" data-tab="synth">Synthèse</button>
+      <button class="tabbtn" data-tab="ventes">Suivi des ventes</button>
+      <button class="tabbtn" data-tab="enc">Encaissements</button>
+      <button class="tabbtn" data-tab="com">Commerciaux</button>
+    </div>
+  </nav>
+</header>
+
+<main class="max-w-[1500px] mx-auto px-6 py-6">
+
+  <!-- =========== SYNTHESE =========== -->
+  <section data-pane="synth">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="kpi">
+        <div class="label">CA pipeline total (HT)</div>
+        <div class="value" id="k-pipe">— DT</div>
+        <div class="sub" id="k-pipe-count">— dossiers • TTC —</div>
+      </div>
+      <div class="kpi">
+        <div class="label">CA confirmé (HT, BC signé +)</div>
+        <div class="value" id="k-confirm">— DT</div>
+        <div class="sub" id="k-confirm-sub">Surface confirmée : — m²</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Options en cours</div>
+        <div class="value" id="k-opt">—</div>
+        <div class="sub" id="k-opt-sub">CA option : — DT</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Encaissé à ce jour</div>
+        <div class="value" id="k-cash">— DT</div>
+        <div class="sub">
+          <div class="progress mt-2"><div id="k-cash-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="label">Reste à encaisser</div>
+        <div class="value" id="k-rest">— DT</div>
+        <div class="sub" id="k-rest-sub">sur CA confirmé</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Commissions</div>
+        <div class="value" id="k-com">— DT</div>
+        <div class="sub" id="k-com-sub">acquises • payées • reste</div>
+      </div>
+    </div>
+
+    <div class="mt-6 bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-200">
+        <h2 class="font-semibold">Paramètres facturation</h2>
+        <p class="text-xs text-slate-500">Montant HT = surface × prix + frais d'inscription. TTC = HT × (1 + TVA).</p>
+      </div>
+      <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-5 text-sm">
+        <div class="field"><label>Frais d'inscription (DT HT)</label><input id="tarif-frais" type="number" min="0" step="1"></div>
+        <div class="field"><label>TVA (%)</label><input id="tarif-tva" type="number" min="0" step="0.5"></div>
+        <div class="text-xs text-slate-500 self-end">Modifications appliquées immédiatement à toutes les ventes.</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+          <h2 class="font-semibold">Funnel commercial</h2>
+          <span class="text-xs text-slate-500">Statut → nb dossiers / CA</span>
+        </div>
+        <table>
+          <thead><tr><th>Statut</th><th class="num">Nb dossiers</th><th class="num">CA (DT)</th><th>Part</th></tr></thead>
+          <tbody id="funnel-body"></tbody>
+          <tfoot><tr class="font-semibold bg-slate-50">
+            <td>Total</td><td class="num" id="funnel-tn">—</td><td class="num" id="funnel-tv">—</td><td></td>
+          </tr></tfoot>
+        </table>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-200">
+          <h2 class="font-semibold">Top commerciaux (CA confirmé)</h2>
+        </div>
+        <table>
+          <thead><tr><th>Commercial</th><th class="num">CA confirmé</th><th class="num">Comm. acquise</th><th class="num">Reste à payer</th></tr></thead>
+          <tbody id="top-com"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========== VENTES =========== -->
+  <section data-pane="ventes" class="hidden">
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-200 flex flex-wrap items-center gap-3 justify-between">
+        <div class="flex items-center gap-3 flex-wrap">
+          <input id="search" type="search" placeholder="Rechercher client, réf, stand…"
+                 class="px-3 py-2 border border-slate-300 rounded-lg text-sm w-64" />
+          <select id="filterStatus" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <option value="">Tous statuts</option>
+          </select>
+          <select id="filterComm" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <option value="">Tous commerciaux</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="openSaleModal()">+ Nouvelle vente</button>
+      </div>
+      <div class="overflow-auto">
+      <table id="ventes-table">
+        <thead>
+          <tr>
+            <th>Réf</th><th>Date</th><th>Client / Exposant</th><th>Commercial</th>
+            <th>Stand</th><th class="num">Surface</th><th class="num">Prix/m²</th><th class="num">Montant HT / TTC</th>
+            <th>Statut</th><th>BC</th><th class="num">Acompte</th><th class="num">Reste</th>
+            <th class="num">% enc.</th><th class="num">Taux</th><th class="num">Comm.</th>
+            <th class="num">Acquise</th><th>Payée</th><th>Échéance</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="ventes-body"></tbody>
+        <tfoot>
+          <tr class="font-semibold bg-slate-50">
+            <td colspan="5">TOTAUX</td>
+            <td class="num" id="t-surface">—</td>
+            <td></td>
+            <td class="num" id="t-ht">—</td>
+            <td colspan="2"></td>
+            <td class="num" id="t-acompte">—</td>
+            <td class="num" id="t-reste">—</td>
+            <td colspan="2"></td>
+            <td class="num" id="t-comm">—</td>
+            <td class="num" id="t-acq">—</td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========== ENCAISSEMENTS =========== -->
+  <section data-pane="enc" class="hidden">
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div>
+          <h2 class="font-semibold">Journal des encaissements</h2>
+          <p class="text-xs text-slate-500">Reporte le cumul dans la colonne Acompte du Suivi des ventes (bouton « ↻ Sync acomptes »).</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-soft" onclick="syncAcomptes()">↻ Sync acomptes</button>
+          <button class="btn btn-primary" onclick="openEncModal()">+ Nouveau paiement</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Réf vente</th><th>Client</th><th>Type</th>
+          <th class="num">Montant (DT)</th><th>Mode / Référence</th><th></th>
+        </tr></thead>
+        <tbody id="enc-body"></tbody>
+        <tfoot><tr class="font-semibold bg-slate-50">
+          <td colspan="4">TOTAL</td><td class="num" id="enc-total">—</td><td colspan="2"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <!-- =========== COMMERCIAUX =========== -->
+  <section data-pane="com" class="hidden">
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div>
+          <h2 class="font-semibold">Commerciaux indépendants — Commissions</h2>
+          <p class="text-xs text-slate-500">Renseigne les noms et taux ; le reste se calcule depuis le Suivi des ventes.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openComModal()">+ Nouveau commercial</button>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Commercial</th><th class="num">Taux par défaut</th>
+          <th class="num">CA apporté</th><th class="num">CA confirmé</th>
+          <th class="num">Comm. acquise</th><th class="num">Comm. payée</th><th class="num">Reste à payer</th><th></th>
+        </tr></thead>
+        <tbody id="com-body"></tbody>
+        <tfoot><tr class="font-semibold bg-slate-50">
+          <td>TOTAL</td><td></td>
+          <td class="num" id="com-tca">—</td>
+          <td class="num" id="com-tcfrm">—</td>
+          <td class="num" id="com-tacq">—</td>
+          <td class="num" id="com-tpay">—</td>
+          <td class="num" id="com-trst">—</td>
+          <td></td>
+        </tr></tfoot>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ MODAL : VENTE ============ -->
+<div id="saleModal" class="hidden fixed inset-0 modal-bg z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl w-full max-w-3xl shadow-2xl">
+    <div class="px-5 py-3 border-b border-slate-200 flex justify-between items-center">
+      <h3 class="font-semibold" id="saleModalTitle">Nouvelle vente</h3>
+      <button class="btn-ghost btn" onclick="closeSaleModal()">✕</button>
+    </div>
+    <form id="saleForm" class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="field"><label>Réf</label><input name="ref" required></div>
+      <div class="field"><label>Date</label><input name="date" type="date" required></div>
+      <div class="field md:col-span-1"><label>Stand / Emplacement</label><input name="stand"></div>
+      <div class="field md:col-span-2"><label>Client / Exposant</label><input name="client" required></div>
+      <div class="field"><label>Commercial</label>
+        <select name="commercial" id="saleCommercial"></select>
+      </div>
+      <div class="field"><label>Surface (m²)</label><input name="surface" type="number" step="0.5" min="0"></div>
+      <div class="field"><label>Prix / m² (DT)</label><input name="prix" type="number" step="1" min="0"></div>
+      <div class="field"><label>Statut commercial</label>
+        <select name="statut" id="saleStatus"></select>
+      </div>
+      <div class="field"><label>BC signé</label>
+        <select name="bc"><option>Oui</option><option selected>Non</option></select>
+      </div>
+      <div class="field"><label>Acompte versé (DT)</label><input name="acompte" type="number" step="1" min="0"></div>
+      <div class="field"><label>Taux commission (%)</label><input name="taux" type="number" step="0.1" min="0"></div>
+      <div class="field"><label>Commission payée</label>
+        <select name="commPayee"><option>Oui</option><option selected>Non</option></select>
+      </div>
+      <div class="field"><label>Échéance option</label><input name="echeance" type="date"></div>
+      <div class="field md:col-span-3"><label>Commentaire</label><textarea name="comment" rows="2"></textarea></div>
+      <div class="md:col-span-3 flex justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" class="btn btn-soft" onclick="closeSaleModal()">Annuler</button>
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL : ENCAISSEMENT ============ -->
+<div id="encModal" class="hidden fixed inset-0 modal-bg z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl w-full max-w-xl shadow-2xl">
+    <div class="px-5 py-3 border-b border-slate-200 flex justify-between items-center">
+      <h3 class="font-semibold" id="encModalTitle">Nouveau paiement</h3>
+      <button class="btn-ghost btn" onclick="closeEncModal()">✕</button>
+    </div>
+    <form id="encForm" class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="field"><label>Date</label><input name="date" type="date" required></div>
+      <div class="field"><label>Réf vente</label>
+        <select name="refVente" id="encRef"></select>
+      </div>
+      <div class="field md:col-span-2"><label>Client</label><input name="client"></div>
+      <div class="field"><label>Type</label>
+        <select name="type"><option>Acompte</option><option>Solde</option><option>Autre</option></select>
+      </div>
+      <div class="field"><label>Montant (DT)</label><input name="montant" type="number" step="1" min="0" required></div>
+      <div class="field md:col-span-2"><label>Mode / Référence</label><input name="mode" placeholder="Virement, chèque n°…"></div>
+      <div class="md:col-span-2 flex justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" class="btn btn-soft" onclick="closeEncModal()">Annuler</button>
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL : COMMERCIAL ============ -->
+<div id="comModal" class="hidden fixed inset-0 modal-bg z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl w-full max-w-md shadow-2xl">
+    <div class="px-5 py-3 border-b border-slate-200 flex justify-between items-center">
+      <h3 class="font-semibold" id="comModalTitle">Nouveau commercial</h3>
+      <button class="btn-ghost btn" onclick="closeComModal()">✕</button>
+    </div>
+    <form id="comForm" class="p-5 grid grid-cols-1 gap-4">
+      <div class="field"><label>Nom</label><input name="nom" required></div>
+      <div class="field"><label>Taux par défaut (%)</label><input name="taux" type="number" step="0.1" min="0" value="8"></div>
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" class="btn btn-soft" onclick="closeComModal()">Annuler</button>
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   ÉTAT — modèle conforme au fichier Excel
+   ========================================================= */
+const STATUTS = ["En attente","Option","Promesse","Confirmé (BC signé)","Acompte versé","Soldé","Annulé"];
+const STATUT_CLASS = {
+  "En attente":"b-attente","Option":"b-option","Promesse":"b-promesse",
+  "Confirmé (BC signé)":"b-confirm","Acompte versé":"b-acompte","Soldé":"b-solde","Annulé":"b-annule"
+};
+const CONFIRMED = new Set(["Confirmé (BC signé)","Acompte versé","Soldé"]);
+
+const STORAGE_KEY = "suivi-salon.organisateur.v1";
+
+const DEFAULT_TARIFS = {
+  fraisInscription: 300,
+  tva: 0.19
+};
+
+const SEED = {
+  tarifs: structuredClone(DEFAULT_TARIFS),
+  commerciaux: [
+    { nom:"Mohamed K.", taux:0.08 },
+    { nom:"Sonia B.",   taux:0.08 },
+    { nom:"Karim T.",   taux:0.08 },
+  ],
+  ventes: [
+    { ref:"V001", date:"2026-06-02", client:"Société Agro Plus", commercial:"Mohamed K.", stand:"A12",
+      surface:18, prix:450, statut:"Confirmé (BC signé)", bc:"Oui", acompte:2000, taux:0.08, commPayee:"Non", echeance:"", comment:"" },
+    { ref:"V002", date:"2026-06-03", client:"TechAgri SARL", commercial:"Sonia B.", stand:"B05",
+      surface:12, prix:450, statut:"Acompte versé", bc:"Oui", acompte:3000, taux:0.08, commPayee:"Non", echeance:"", comment:"" },
+    { ref:"V003", date:"2026-06-04", client:"Délices du Sud", commercial:"Mohamed K.", stand:"C20",
+      surface:24, prix:500, statut:"Option", bc:"Non", acompte:0, taux:0.08, commPayee:"Non", echeance:"2026-06-20", comment:"" },
+    { ref:"V004", date:"2026-06-04", client:"GreenField Co", commercial:"Sonia B.", stand:"D02",
+      surface:9, prix:450, statut:"Promesse", bc:"Non", acompte:0, taux:0.10, commPayee:"Non", echeance:"", comment:"" },
+    { ref:"V005", date:"2026-06-05", client:"BioTunisie", commercial:"Karim T.", stand:"A03",
+      surface:36, prix:500, statut:"En attente", bc:"Non", acompte:0, taux:0.08, commPayee:"Non", echeance:"", comment:"" },
+  ],
+  encaissements: []
+};
+
+let state = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (!data.tarifs) data.tarifs = structuredClone(DEFAULT_TARIFS);
+      if (data.tarifs.fraisInscription == null) data.tarifs.fraisInscription = DEFAULT_TARIFS.fraisInscription;
+      if (data.tarifs.tva == null) data.tarifs.tva = DEFAULT_TARIFS.tva;
+      return data;
+    }
+  } catch(e){}
+  return structuredClone(SEED);
+}
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+/* =========================================================
+   FORMULES (équivalents Excel)
+   ========================================================= */
+function vBaseEspace(v){ return (Number(v.surface)||0) * (Number(v.prix)||0); }
+function vFrais(v)     { return vBaseEspace(v) > 0 ? (Number(state.tarifs.fraisInscription)||0) : 0; }
+function vMontant(v)   { return vBaseEspace(v) + vFrais(v); }                  // HT (espace + frais)
+function vTTC(v)       { return vMontant(v) * (1 + (Number(state.tarifs.tva)||0)); }
+function vReste(v)     { const t=vTTC(v); return t===0?0:t-(Number(v.acompte)||0); }
+function vPctEnc(v)    { const t=vTTC(v); return t===0?0:(Number(v.acompte)||0)/t; }
+function vComm(v)      { const b=vBaseEspace(v); return b===0?0:b*(Number(v.taux)||0); }   // base = espace (frais exclus)
+function vCommAcq(v)   { return CONFIRMED.has(v.statut) ? vComm(v) : 0; }
+function vCommPayee(v) { return v.commPayee==="Oui" ? vCommAcq(v) : 0; }
+
+function fmtDT(n) {
+  if (n==null||isNaN(n)) return "—";
+  return new Intl.NumberFormat("fr-FR",{maximumFractionDigits:0}).format(Math.round(n)) + " DT";
+}
+function fmtNum(n,d=0) {
+  if (n==null||isNaN(n)) return "—";
+  return new Intl.NumberFormat("fr-FR",{maximumFractionDigits:d, minimumFractionDigits:d}).format(n);
+}
+function fmtPct(n,d=0) {
+  if (n==null||isNaN(n)) return "—";
+  return new Intl.NumberFormat("fr-FR",{style:"percent",maximumFractionDigits:d}).format(n);
+}
+function fmtDate(iso) {
+  if (!iso) return "";
+  const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`;
+}
+
+/* =========================================================
+   ONGLET
+   ========================================================= */
+document.querySelectorAll(".tabbtn").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".tabbtn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    const t = b.dataset.tab;
+    document.querySelectorAll("[data-pane]").forEach(p => p.classList.toggle("hidden", p.dataset.pane!==t));
+  });
+});
+
+/* =========================================================
+   RENDU GLOBAL
+   ========================================================= */
+function renderAll() {
+  populateSelects();
+  renderParams();
+  renderSynthese();
+  renderVentes();
+  renderEnc();
+  renderCom();
+}
+
+function renderParams() {
+  const t = state.tarifs;
+  document.getElementById("tarif-frais").value = t.fraisInscription;
+  document.getElementById("tarif-tva").value = +(t.tva*100).toFixed(2);
+}
+function bindParams() {
+  document.getElementById("tarif-frais").addEventListener("change", e=>{
+    state.tarifs.fraisInscription = Number(e.target.value)||0;
+    save(); renderSynthese(); renderVentes();
+  });
+  document.getElementById("tarif-tva").addEventListener("change", e=>{
+    state.tarifs.tva = (Number(e.target.value)||0)/100;
+    save(); renderSynthese(); renderVentes();
+  });
+}
+
+function populateSelects() {
+  // Filters
+  const fs = document.getElementById("filterStatus");
+  fs.innerHTML = '<option value="">Tous statuts</option>' + STATUTS.map(s=>`<option>${s}</option>`).join("");
+  const fc = document.getElementById("filterComm");
+  fc.innerHTML = '<option value="">Tous commerciaux</option>' + state.commerciaux.map(c=>`<option>${c.nom}</option>`).join("");
+
+  // Sale form selects
+  const ss = document.getElementById("saleStatus");
+  ss.innerHTML = STATUTS.map(s=>`<option>${s}</option>`).join("");
+  const sc = document.getElementById("saleCommercial");
+  sc.innerHTML = state.commerciaux.map(c=>`<option>${c.nom}</option>`).join("");
+
+  // Encaissement form
+  const er = document.getElementById("encRef");
+  er.innerHTML = '<option value="">—</option>' + state.ventes.map(v=>`<option value="${v.ref}">${v.ref} — ${v.client}</option>`).join("");
+}
+
+/* =========================================================
+   SYNTHESE
+   ========================================================= */
+function renderSynthese() {
+  const v = state.ventes;
+  const pipe = v.reduce((s,x)=>s+vMontant(x),0);
+  const pipeTTC = v.reduce((s,x)=>s+vTTC(x),0);
+  const confirmed = v.filter(x=>CONFIRMED.has(x.statut));
+  const caConf = confirmed.reduce((s,x)=>s+vMontant(x),0);
+  const caConfTTC = confirmed.reduce((s,x)=>s+vTTC(x),0);
+  const surfConf = confirmed.reduce((s,x)=>s+(Number(x.surface)||0),0);
+  const cash = v.reduce((s,x)=>s+(Number(x.acompte)||0),0);
+  const rest = v.reduce((s,x)=>s+vReste(x),0);
+  const opts = v.filter(x=>x.statut==="Option");
+  const optCA = opts.reduce((s,x)=>s+vMontant(x),0);
+  const comm = v.reduce((s,x)=>s+vComm(x),0);
+  const acq  = v.reduce((s,x)=>s+vCommAcq(x),0);
+  const pay  = v.reduce((s,x)=>s+vCommPayee(x),0);
+  const restCom = acq-pay;
+
+  document.getElementById("k-pipe").textContent = fmtDT(pipe);
+  document.getElementById("k-pipe-count").textContent = `${v.length} dossier${v.length>1?"s":""}  •  TTC ${fmtDT(pipeTTC)}`;
+  document.getElementById("k-confirm").textContent = fmtDT(caConf);
+  document.getElementById("k-confirm-sub").textContent = `Surface confirmée : ${fmtNum(surfConf,1)} m²  •  TTC ${fmtDT(caConfTTC)}`;
+  document.getElementById("k-opt").textContent = String(opts.length);
+  document.getElementById("k-opt-sub").textContent = "CA option : " + fmtDT(optCA);
+  document.getElementById("k-cash").textContent = fmtDT(cash);
+  const pct = caConf>0 ? Math.min(100, Math.round(cash/caConf*100)) : 0;
+  document.getElementById("k-cash-bar").style.width = pct + "%";
+  document.getElementById("k-rest").textContent = fmtDT(rest);
+  document.getElementById("k-com").textContent = fmtDT(comm);
+  document.getElementById("k-com-sub").textContent = `acquise ${fmtDT(acq)} • payée ${fmtDT(pay)} • reste ${fmtDT(restCom)}`;
+
+  // Funnel
+  const body = document.getElementById("funnel-body");
+  let totN=0, totV=0;
+  body.innerHTML = STATUTS.map(s=>{
+    const arr = v.filter(x=>x.statut===s);
+    const n = arr.length;
+    const val = arr.reduce((a,b)=>a+vMontant(b),0);
+    totN+=n; totV+=val;
+    const part = pipe>0 ? val/pipe : 0;
+    return `<tr>
+      <td><span class="badge ${STATUT_CLASS[s]}">${s}</span></td>
+      <td class="num">${n}</td>
+      <td class="num">${fmtDT(val)}</td>
+      <td><div class="progress"><div style="width:${(part*100).toFixed(0)}%"></div></div></td>
+    </tr>`;
+  }).join("");
+  document.getElementById("funnel-tn").textContent = totN;
+  document.getElementById("funnel-tv").textContent = fmtDT(totV);
+
+  // Top commerciaux
+  const tc = document.getElementById("top-com");
+  const rows = state.commerciaux.map(c=>{
+    const vs = v.filter(x=>x.commercial===c.nom);
+    const cf = vs.filter(x=>CONFIRMED.has(x.statut)).reduce((a,b)=>a+vMontant(b),0);
+    const ac = vs.reduce((a,b)=>a+vCommAcq(b),0);
+    const pa = vs.reduce((a,b)=>a+vCommPayee(b),0);
+    return { nom:c.nom, cf, ac, rest:ac-pa };
+  }).sort((a,b)=>b.cf-a.cf);
+  tc.innerHTML = rows.map(r=>`<tr>
+    <td>${r.nom}</td>
+    <td class="num">${fmtDT(r.cf)}</td>
+    <td class="num">${fmtDT(r.ac)}</td>
+    <td class="num">${fmtDT(r.rest)}</td>
+  </tr>`).join("") || `<tr><td colspan="4" class="text-center text-slate-400 py-4">Aucun commercial enregistré</td></tr>`;
+}
+
+/* =========================================================
+   VENTES — table inline + filtre
+   ========================================================= */
+let filterText="", filterStatus="", filterComm="";
+
+document.getElementById("search").addEventListener("input", e=>{filterText=e.target.value.toLowerCase(); renderVentes();});
+document.getElementById("filterStatus").addEventListener("change", e=>{filterStatus=e.target.value; renderVentes();});
+document.getElementById("filterComm").addEventListener("change", e=>{filterComm=e.target.value; renderVentes();});
+
+function renderVentes() {
+  const tbody = document.getElementById("ventes-body");
+  let list = state.ventes.slice();
+  if (filterStatus) list = list.filter(v=>v.statut===filterStatus);
+  if (filterComm)   list = list.filter(v=>v.commercial===filterComm);
+  if (filterText) {
+    list = list.filter(v =>
+      (v.ref||"").toLowerCase().includes(filterText) ||
+      (v.client||"").toLowerCase().includes(filterText) ||
+      (v.stand||"").toLowerCase().includes(filterText) ||
+      (v.commercial||"").toLowerCase().includes(filterText)
+    );
+  }
+
+  tbody.innerHTML = list.map(v=>{
+    const idx = state.ventes.indexOf(v);
+    return `<tr>
+      <td class="font-medium">${v.ref}</td>
+      <td>${fmtDate(v.date)}</td>
+      <td>${escapeHTML(v.client||"")}</td>
+      <td>${escapeHTML(v.commercial||"")}</td>
+      <td>${escapeHTML(v.stand||"")}</td>
+      <td class="num">${v.surface?fmtNum(v.surface,1):""}</td>
+      <td class="num">${v.prix?fmtNum(v.prix):""}</td>
+      <td class="num">
+        <div class="font-semibold">${fmtDT(vMontant(v))}</div>
+        <div class="text-xs text-slate-400">TTC ${fmtDT(vTTC(v))}</div>
+      </td>
+      <td><span class="badge ${STATUT_CLASS[v.statut]||""}">${v.statut||""}</span></td>
+      <td>${v.bc||""}</td>
+      <td class="num">${v.acompte?fmtNum(v.acompte):""}</td>
+      <td class="num">${fmtDT(vReste(v))}</td>
+      <td class="num">${fmtPct(vPctEnc(v))}</td>
+      <td class="num">${v.taux?fmtPct(v.taux,1):""}</td>
+      <td class="num">${fmtDT(vComm(v))}</td>
+      <td class="num">${fmtDT(vCommAcq(v))}</td>
+      <td>${v.commPayee||""}</td>
+      <td>${fmtDate(v.echeance)}</td>
+      <td class="text-right whitespace-nowrap">
+        <button class="btn-ghost btn" title="Modifier" onclick="editSale(${idx})">✎</button>
+        <button class="btn-ghost btn" title="Supprimer" onclick="deleteSale(${idx})">🗑</button>
+      </td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="19" class="text-center text-slate-400 py-6">Aucune vente</td></tr>`;
+
+  // Totaux
+  const all = state.ventes;
+  document.getElementById("t-surface").textContent = fmtNum(all.reduce((s,v)=>s+(Number(v.surface)||0),0),1);
+  const totHT = all.reduce((s,v)=>s+vMontant(v),0);
+  const totTTC = all.reduce((s,v)=>s+vTTC(v),0);
+  document.getElementById("t-ht").innerHTML = `<div class="font-semibold">${fmtDT(totHT)}</div><div class="text-xs font-normal text-slate-400">TTC ${fmtDT(totTTC)}</div>`;
+  document.getElementById("t-acompte").textContent = fmtDT(all.reduce((s,v)=>s+(Number(v.acompte)||0),0));
+  document.getElementById("t-reste").textContent   = fmtDT(all.reduce((s,v)=>s+vReste(v),0));
+  document.getElementById("t-comm").textContent    = fmtDT(all.reduce((s,v)=>s+vComm(v),0));
+  document.getElementById("t-acq").textContent     = fmtDT(all.reduce((s,v)=>s+vCommAcq(v),0));
+}
+
+function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+/* =========================================================
+   MODAL VENTE
+   ========================================================= */
+let editingSaleIdx = null;
+function openSaleModal() {
+  editingSaleIdx = null;
+  document.getElementById("saleModalTitle").textContent = "Nouvelle vente";
+  const f = document.getElementById("saleForm");
+  f.reset();
+  // default ref
+  const nextNum = (state.ventes.reduce((m,v)=>{
+    const n = parseInt(String(v.ref||"").replace(/\D/g,""));
+    return isNaN(n)?m:Math.max(m,n);
+  },0)+1);
+  f.ref.value = "V" + String(nextNum).padStart(3,"0");
+  f.date.value = new Date().toISOString().slice(0,10);
+  f.taux.value = 8;
+  f.statut.value = "En attente";
+  document.getElementById("saleModal").classList.remove("hidden");
+}
+function editSale(idx) {
+  editingSaleIdx = idx;
+  document.getElementById("saleModalTitle").textContent = "Modifier la vente";
+  const v = state.ventes[idx];
+  const f = document.getElementById("saleForm");
+  f.ref.value = v.ref || "";
+  f.date.value = v.date || "";
+  f.client.value = v.client || "";
+  f.commercial.value = v.commercial || "";
+  f.stand.value = v.stand || "";
+  f.surface.value = v.surface ?? "";
+  f.prix.value = v.prix ?? "";
+  f.statut.value = v.statut || "En attente";
+  f.bc.value = v.bc || "Non";
+  f.acompte.value = v.acompte ?? 0;
+  f.taux.value = v.taux!=null ? (v.taux*100) : "";
+  f.commPayee.value = v.commPayee || "Non";
+  f.echeance.value = v.echeance || "";
+  f.comment.value = v.comment || "";
+  document.getElementById("saleModal").classList.remove("hidden");
+}
+function closeSaleModal() { document.getElementById("saleModal").classList.add("hidden"); }
+
+document.getElementById("saleForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const v = {
+    ref: fd.get("ref").trim(),
+    date: fd.get("date"),
+    client: fd.get("client").trim(),
+    commercial: fd.get("commercial"),
+    stand: fd.get("stand").trim(),
+    surface: Number(fd.get("surface"))||0,
+    prix: Number(fd.get("prix"))||0,
+    statut: fd.get("statut"),
+    bc: fd.get("bc"),
+    acompte: Number(fd.get("acompte"))||0,
+    taux: (Number(fd.get("taux"))||0)/100,
+    commPayee: fd.get("commPayee"),
+    echeance: fd.get("echeance") || "",
+    comment: fd.get("comment") || "",
+  };
+  if (editingSaleIdx===null) state.ventes.push(v);
+  else state.ventes[editingSaleIdx] = v;
+  save(); closeSaleModal(); renderAll();
+});
+
+function deleteSale(idx) {
+  const v = state.ventes[idx];
+  if (!confirm(`Supprimer la vente ${v.ref} — ${v.client} ?`)) return;
+  state.ventes.splice(idx,1);
+  save(); renderAll();
+}
+
+/* =========================================================
+   ENCAISSEMENTS
+   ========================================================= */
+let editingEncIdx = null;
+function openEncModal() {
+  editingEncIdx = null;
+  document.getElementById("encModalTitle").textContent = "Nouveau paiement";
+  const f = document.getElementById("encForm");
+  f.reset();
+  f.date.value = new Date().toISOString().slice(0,10);
+  document.getElementById("encModal").classList.remove("hidden");
+}
+function editEnc(idx) {
+  editingEncIdx = idx;
+  document.getElementById("encModalTitle").textContent = "Modifier le paiement";
+  const e = state.encaissements[idx];
+  const f = document.getElementById("encForm");
+  f.date.value = e.date || "";
+  f.refVente.value = e.refVente || "";
+  f.client.value = e.client || "";
+  f.type.value = e.type || "Acompte";
+  f.montant.value = e.montant ?? 0;
+  f.mode.value = e.mode || "";
+  document.getElementById("encModal").classList.remove("hidden");
+}
+function closeEncModal() { document.getElementById("encModal").classList.add("hidden"); }
+
+document.getElementById("encRef").addEventListener("change", e=>{
+  const ref = e.target.value;
+  const v = state.ventes.find(x=>x.ref===ref);
+  if (v) document.getElementById("encForm").client.value = v.client;
+});
+
+document.getElementById("encForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const enc = {
+    date: fd.get("date"),
+    refVente: fd.get("refVente") || "",
+    client: fd.get("client") || "",
+    type: fd.get("type") || "Acompte",
+    montant: Number(fd.get("montant"))||0,
+    mode: fd.get("mode") || "",
+  };
+  if (editingEncIdx===null) state.encaissements.push(enc);
+  else state.encaissements[editingEncIdx] = enc;
+  save(); closeEncModal(); renderAll();
+});
+
+function deleteEnc(idx) {
+  if (!confirm("Supprimer ce paiement ?")) return;
+  state.encaissements.splice(idx,1);
+  save(); renderAll();
+}
+
+function renderEnc() {
+  const body = document.getElementById("enc-body");
+  const list = state.encaissements.slice().sort((a,b)=> (a.date||"").localeCompare(b.date||""));
+  body.innerHTML = list.map(e=>{
+    const idx = state.encaissements.indexOf(e);
+    return `<tr>
+      <td>${fmtDate(e.date)}</td>
+      <td class="font-medium">${escapeHTML(e.refVente||"")}</td>
+      <td>${escapeHTML(e.client||"")}</td>
+      <td>${escapeHTML(e.type||"")}</td>
+      <td class="num">${fmtNum(e.montant)}</td>
+      <td>${escapeHTML(e.mode||"")}</td>
+      <td class="text-right whitespace-nowrap">
+        <button class="btn-ghost btn" onclick="editEnc(${idx})">✎</button>
+        <button class="btn-ghost btn" onclick="deleteEnc(${idx})">🗑</button>
+      </td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" class="text-center text-slate-400 py-6">Aucun encaissement</td></tr>`;
+  const tot = state.encaissements.reduce((s,e)=>s+(Number(e.montant)||0),0);
+  document.getElementById("enc-total").textContent = fmtDT(tot);
+}
+
+function syncAcomptes() {
+  const sums = {};
+  state.encaissements.forEach(e=>{
+    if (!e.refVente) return;
+    sums[e.refVente] = (sums[e.refVente]||0) + (Number(e.montant)||0);
+  });
+  let touched = 0;
+  state.ventes.forEach(v=>{
+    if (sums[v.ref]!=null && v.acompte !== sums[v.ref]) {
+      v.acompte = sums[v.ref];
+      touched++;
+    }
+  });
+  save(); renderAll();
+  alert(touched ? `Acomptes synchronisés sur ${touched} vente(s).` : "Tous les acomptes sont déjà à jour.");
+}
+
+/* =========================================================
+   COMMERCIAUX
+   ========================================================= */
+let editingComIdx = null;
+function openComModal() {
+  editingComIdx = null;
+  document.getElementById("comModalTitle").textContent = "Nouveau commercial";
+  const f = document.getElementById("comForm");
+  f.reset();
+  f.taux.value = 8;
+  document.getElementById("comModal").classList.remove("hidden");
+}
+function editCom(idx) {
+  editingComIdx = idx;
+  document.getElementById("comModalTitle").textContent = "Modifier le commercial";
+  const c = state.commerciaux[idx];
+  const f = document.getElementById("comForm");
+  f.nom.value = c.nom;
+  f.taux.value = (c.taux*100);
+  document.getElementById("comModal").classList.remove("hidden");
+}
+function closeComModal() { document.getElementById("comModal").classList.add("hidden"); }
+
+document.getElementById("comForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const c = { nom: fd.get("nom").trim(), taux: (Number(fd.get("taux"))||0)/100 };
+  if (editingComIdx===null) {
+    if (state.commerciaux.some(x=>x.nom.toLowerCase()===c.nom.toLowerCase())) {
+      alert("Un commercial avec ce nom existe déjà."); return;
+    }
+    state.commerciaux.push(c);
+  } else {
+    const old = state.commerciaux[editingComIdx].nom;
+    state.commerciaux[editingComIdx] = c;
+    // Renommer dans les ventes si le nom a changé
+    if (old !== c.nom) state.ventes.forEach(v=>{ if (v.commercial===old) v.commercial=c.nom; });
+  }
+  save(); closeComModal(); renderAll();
+});
+
+function deleteCom(idx) {
+  const c = state.commerciaux[idx];
+  const used = state.ventes.some(v=>v.commercial===c.nom);
+  if (used && !confirm(`${c.nom} est lié à des ventes. Supprimer quand même ?`)) return;
+  if (!used && !confirm(`Supprimer ${c.nom} ?`)) return;
+  state.commerciaux.splice(idx,1);
+  save(); renderAll();
+}
+
+function renderCom() {
+  const body = document.getElementById("com-body");
+  let tca=0,tcfrm=0,tacq=0,tpay=0,trst=0;
+  body.innerHTML = state.commerciaux.map((c,idx)=>{
+    const vs = state.ventes.filter(v=>v.commercial===c.nom);
+    const ca = vs.reduce((s,v)=>s+vMontant(v),0);
+    const cf = vs.filter(v=>CONFIRMED.has(v.statut)).reduce((s,v)=>s+vMontant(v),0);
+    const acq = vs.reduce((s,v)=>s+vCommAcq(v),0);
+    const pay = vs.reduce((s,v)=>s+vCommPayee(v),0);
+    tca+=ca; tcfrm+=cf; tacq+=acq; tpay+=pay; trst+=acq-pay;
+    return `<tr>
+      <td class="font-medium">${escapeHTML(c.nom)}</td>
+      <td class="num">${fmtPct(c.taux,1)}</td>
+      <td class="num">${fmtDT(ca)}</td>
+      <td class="num">${fmtDT(cf)}</td>
+      <td class="num">${fmtDT(acq)}</td>
+      <td class="num">${fmtDT(pay)}</td>
+      <td class="num">${fmtDT(acq-pay)}</td>
+      <td class="text-right whitespace-nowrap">
+        <button class="btn-ghost btn" onclick="editCom(${idx})">✎</button>
+        <button class="btn-ghost btn" onclick="deleteCom(${idx})">🗑</button>
+      </td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8" class="text-center text-slate-400 py-6">Aucun commercial</td></tr>`;
+  document.getElementById("com-tca").textContent = fmtDT(tca);
+  document.getElementById("com-tcfrm").textContent = fmtDT(tcfrm);
+  document.getElementById("com-tacq").textContent = fmtDT(tacq);
+  document.getElementById("com-tpay").textContent = fmtDT(tpay);
+  document.getElementById("com-trst").textContent = fmtDT(trst);
+}
+
+/* =========================================================
+   IMPORT / EXPORT / RESET
+   ========================================================= */
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `siat26-suivi-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function importJSON(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const data = JSON.parse(fr.result);
+      if (!data.ventes || !data.commerciaux) throw new Error("Format invalide");
+      state = data; if (!state.encaissements) state.encaissements=[];
+      save(); renderAll();
+      alert("Import réussi.");
+    } catch(err) { alert("Échec import : " + err.message); }
+  };
+  fr.readAsText(file);
+  e.target.value = "";
+}
+function exportCSV() {
+  const head = ["Réf","Date","Client","Commercial","Stand","Surface (m²)","Prix/m² (DT)","Frais inscription (DT)",
+                "Montant HT (DT)","Montant TTC (DT)","Statut","BC signé","Acompte (DT)","Reste (DT)","% encaissé",
+                "Taux comm.","Commission (DT)","Comm. acquise (DT)","Comm. payée","Échéance option","Commentaire"];
+  const rows = state.ventes.map(v=>[
+    v.ref, v.date, v.client, v.commercial, v.stand, v.surface, v.prix, vFrais(v),
+    vMontant(v), vTTC(v), v.statut, v.bc, v.acompte, vReste(v),
+    (vPctEnc(v)*100).toFixed(2)+"%", (v.taux*100).toFixed(2)+"%",
+    vComm(v), vCommAcq(v), v.commPayee, v.echeance, v.comment
+  ]);
+  const csv = [head, ...rows].map(r => r.map(x => {
+    const s = (x==null?"":String(x));
+    return /[",;\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  }).join(";")).join("\n");
+  const blob = new Blob(["﻿"+csv], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `siat26-ventes-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+function confirmReset() {
+  if (!confirm("Réinitialiser toutes les données ? (les exemples d'origine seront restaurés)")) return;
+  state = structuredClone(SEED); save(); renderAll();
+}
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+bindParams();
+renderAll();
+</script>
+</body>
+</html>

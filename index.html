@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Suivi des ventes salons — Choix du mode</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, Arial, sans-serif; }
+  .card { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 10px 30px -10px rgba(15,23,42,.18); }
+  .pill { display:inline-flex; align-items:center; padding:.2rem .6rem; border-radius:9999px; font-size:.72rem; font-weight:600; }
+  .check { display:inline-block; width:1rem; color:#16a34a; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+<header class="bg-white border-b border-slate-200">
+  <div class="max-w-5xl mx-auto px-6 py-5">
+    <h1 class="text-2xl font-bold tracking-tight">Suivi des ventes — salons</h1>
+    <p class="text-sm text-slate-500 mt-1">Choisis le mode adapté au salon en cours. Les données de chaque mode sont stockées séparément.</p>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 py-10">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <a href="organisateur.html" class="card block bg-white rounded-2xl border border-slate-200 p-6 hover:border-emerald-400">
+      <div class="flex items-start justify-between">
+        <div>
+          <span class="pill bg-emerald-100 text-emerald-700">Mode 1</span>
+          <h2 class="text-xl font-bold mt-3">Salon organisé en propre</h2>
+          <p class="text-sm text-slate-500 mt-1">Nous sommes l'organisateur du salon. Pas d'intermédiaire.</p>
+        </div>
+        <div class="text-3xl">🏟️</div>
+      </div>
+      <div class="mt-5 text-sm space-y-1.5">
+        <div><span class="check">✓</span> Commission commercial = <strong>Montant HT × Taux</strong></div>
+        <div><span class="check">✓</span> Prix /m² libre, taux par défaut 8 %</div>
+        <div><span class="check">✓</span> Suivi funnel, encaissements, commissions</div>
+      </div>
+      <div class="mt-6 text-emerald-700 font-semibold text-sm">Ouvrir →</div>
+    </a>
+
+    <a href="commissionnaire.html" class="card block bg-white rounded-2xl border border-slate-200 p-6 hover:border-indigo-400">
+      <div class="flex items-start justify-between">
+        <div>
+          <span class="pill bg-indigo-100 text-indigo-700">Mode 2</span>
+          <h2 class="text-xl font-bold mt-3">Salon en commission (intermédiaire)</h2>
+          <p class="text-sm text-slate-500 mt-1">Nous revendons l'espace d'un organisateur tiers (ex. SIAT'26).</p>
+        </div>
+        <div class="text-3xl">🤝</div>
+      </div>
+      <div class="mt-5 text-sm space-y-1.5">
+        <div><span class="check">✓</span> Commission = <strong>Surface × (Prix − Coût orga) × Taux</strong></div>
+        <div><span class="check">✓</span> 2 types de stand : <strong>Nu</strong> (290 / 200) & <strong>Semi-équipé</strong> (380 / 250)</div>
+        <div><span class="check">✓</span> Taux par défaut 15 %, tarifs paramétrables</div>
+      </div>
+      <div class="mt-6 text-indigo-700 font-semibold text-sm">Ouvrir →</div>
+    </a>
+
+  </div>
+
+  <div class="mt-8 bg-white border border-slate-200 rounded-xl p-5 text-sm text-slate-600">
+    <strong class="text-slate-900">Note —</strong>
+    Chaque mode a son propre espace de stockage local (navigateur). Tu peux switcher à tout moment depuis l'en-tête de chaque application via le bouton <span class="pill bg-slate-100 text-slate-700">← Modes</span>.
+    Pense à utiliser <strong>Exporter</strong> régulièrement pour sauvegarder un fichier JSON externe.
+  </div>
+</main>
+
+</body>
+</html>
