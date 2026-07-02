@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Suivi salon — Commission (équipe)</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/pocketbase@0.27.0/dist/pocketbase.umd.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
@@ -60,6 +60,27 @@
   .field input:focus, .field select:focus, .field textarea:focus { outline:2px solid #16a34a; outline-offset:-1px; border-color:#16a34a; }
   details > summary { cursor:pointer; list-style:none; }
   details > summary::-webkit-details-marker { display:none; }
+
+  /* Suivi des ventes : entête + Réf + actions figés pour éviter le double scroll */
+  #ventes-table thead th { position: sticky; top: 0; z-index: 3; }
+  #ventes-table thead th:first-child,
+  #ventes-table tbody td:first-child,
+  #ventes-table tfoot td:first-child {
+    position: sticky; left: 0; background:#fff;
+    box-shadow: inset -1px 0 0 #e2e8f0;
+  }
+  #ventes-table thead th:last-child,
+  #ventes-table tbody td:last-child,
+  #ventes-table tfoot td:last-child {
+    position: sticky; right: 0; background:#fff;
+    box-shadow: inset 1px 0 0 #e2e8f0;
+  }
+  #ventes-table thead th:first-child,
+  #ventes-table thead th:last-child { z-index: 4; background:#f8fafc; }
+  #ventes-table tfoot td:first-child,
+  #ventes-table tfoot td:last-child { background:#f8fafc; }
+  #ventes-table tbody tr:hover td:first-child,
+  #ventes-table tbody tr:hover td:last-child { background:#f8fafc; }
 </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -242,7 +263,8 @@
         <tbody id="ventes-body"></tbody>
         <tfoot>
           <tr class="font-semibold bg-slate-50">
-            <td colspan="6">TOTAUX</td>
+            <td>TOTAUX</td>
+            <td colspan="5"></td>
             <td class="num" id="t-surface">—</td>
             <td colspan="2"></td>
             <td class="num" id="t-ht">—</td>
@@ -253,7 +275,8 @@
             <td class="num" id="t-marge">—</td>
             <td class="num" id="t-comm">—</td>
             <td class="num" id="t-acq">—</td>
-            <td colspan="3"></td>
+            <td colspan="2"></td>
+            <td></td>
           </tr>
         </tfoot>
       </table>
@@ -423,11 +446,140 @@ const CONFIRMED = new Set(["Confirmé (BC signé)","Acompte versé","Soldé"]);
 const TYPES = ["Nu","Semi-équipé"];
 
 /* =========================================================
-   ░░░ CONFIGURATION SUPABASE — À RENSEIGNER ░░░
+   BACKEND — PocketBase (pb-suivi.3ec.tn)
+   `sb` reproduit ci-dessous l'API minimale Supabase utilisée
+   dans ce fichier, au-dessus du SDK PocketBase.
    ========================================================= */
-const SUPABASE_URL = "https://nqvjauujecwhxhwnoggh.supabase.co";  
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xdmphdXVqZWN3aHhod25vZ2doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NDIwNzIsImV4cCI6MjA5NjMxODA3Mn0.86IiFXZEJnC3E08JVSnd_H5ad80lGzRBVU6JkXKRyr8";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const pb = new PocketBase("https://pb-suivi.3ec.tn");
+
+function _escape(v) { return String(v).replace(/"/g, '\\"'); }
+function _filter(filters) {
+  return filters.map(f => `${f.col} ${f.op} "${_escape(f.val)}"`).join(' && ');
+}
+// Champs Supabase système à ne pas envoyer à PocketBase (géré côté serveur PB)
+const _DROP_FIELDS = ['id', 'created_at', 'updated_at'];
+function _clean(obj) {
+  const o = { ...obj };
+  for (const k of _DROP_FIELDS) delete o[k];
+  return o;
+}
+
+class SBQuery {
+  constructor(collection) { this.collection = collection; this.filters = []; this.sorts = []; }
+  select() { return this; }
+  eq(col, val)  { this.filters.push({op:'=',  col, val}); return this; }
+  neq(col, val) { this.filters.push({op:'!=', col, val}); return this; }
+  order(col, opts = {}) { this.sorts.push((opts.ascending === false ? '-' : '') + col); return this; }
+  _opts(extra = {}) {
+    const opts = { ...extra };
+    const f = _filter(this.filters);
+    if (f) opts.filter = f;
+    if (this.sorts.length) opts.sort = this.sorts.join(',');
+    return opts;
+  }
+  then(resolve, reject) { return this._all().then(resolve, reject); }
+  async _all() {
+    try {
+      if (this.collection === 'profiles') {
+        const rec = pb.authStore.record;
+        return { data: rec ? [{ id: rec.id, email: rec.email, role: rec.role }] : [], error: null };
+      }
+      const data = await pb.collection(this.collection).getFullList(this._opts());
+      return { data, error: null };
+    } catch (e) { return { data: null, error: e }; }
+  }
+  async maybeSingle() {
+    try {
+      if (this.collection === 'profiles') {
+        const rec = pb.authStore.record;
+        return { data: rec ? { id: rec.id, email: rec.email, role: rec.role } : null, error: null };
+      }
+      const list = await pb.collection(this.collection).getFullList(this._opts({ perPage: 1 }));
+      return { data: list[0] || null, error: null };
+    } catch (e) { return { data: null, error: e }; }
+  }
+  insert(obj)  { return new SBInsert(this.collection, obj); }
+  update(patch){ return new SBUpdate(this.collection, patch, this.filters); }
+  delete()     { return new SBDelete(this.collection, this.filters); }
+  async upsert(obj) {
+    try {
+      const strip = _clean(obj);
+      let existing = null;
+      if (this.collection === 'tarifs') {
+        const list = await pb.collection('tarifs').getFullList({ perPage: 1 });
+        existing = list[0] || null;
+      } else if (this.collection === 'commerciaux' && obj.nom) {
+        existing = await pb.collection('commerciaux').getFirstListItem(`nom="${_escape(obj.nom)}"`).catch(()=>null);
+      } else if (this.collection === 'ventes' && obj.ref) {
+        existing = await pb.collection('ventes').getFirstListItem(`ref="${_escape(obj.ref)}"`).catch(()=>null);
+      }
+      if (existing) await pb.collection(this.collection).update(existing.id, strip);
+      else          await pb.collection(this.collection).create(strip);
+      return { data: null, error: null };
+    } catch (e) { return { data: null, error: e }; }
+  }
+}
+
+class SBInsert {
+  constructor(collection, obj) { this.collection = collection; this.obj = obj; }
+  select() { return this; }
+  async single() {
+    try {
+      const clean = _clean(this.obj);
+      const rec = await pb.collection(this.collection).create(clean);
+      return { data: rec, error: null };
+    } catch (e) { return { data: null, error: e }; }
+  }
+  then(resolve, reject) { return this.single().then(resolve, reject); }
+}
+
+class SBUpdate {
+  constructor(collection, patch, filters) { this.collection = collection; this.patch = patch; this.filters = [...filters]; }
+  eq(col, val) { this.filters.push({op:'=', col, val}); return this; }
+  then(resolve, reject) { return this._exec().then(resolve, reject); }
+  async _exec() {
+    try {
+      const f = _filter(this.filters);
+      const rows = await pb.collection(this.collection).getFullList(f ? { filter: f } : {});
+      const patch = _clean(this.patch);
+      for (const r of rows) await pb.collection(this.collection).update(r.id, patch);
+      return { data: null, error: null };
+    } catch (e) { return { data: null, error: e }; }
+  }
+}
+
+class SBDelete {
+  constructor(collection, filters) { this.collection = collection; this.filters = [...filters]; }
+  eq(col, val)  { this.filters.push({op:'=',  col, val}); return this; }
+  neq(col, val) { this.filters.push({op:'!=', col, val}); return this; }
+  then(resolve, reject) { return this._exec().then(resolve, reject); }
+  async _exec() {
+    try {
+      const f = _filter(this.filters);
+      const rows = await pb.collection(this.collection).getFullList(f ? { filter: f } : {});
+      for (const r of rows) await pb.collection(this.collection).delete(r.id);
+      return { data: null, error: null };
+    } catch (e) { return { data: null, error: e }; }
+  }
+}
+
+const sb = {
+  from: (collection) => new SBQuery(collection),
+  auth: {
+    async signInWithPassword({ email, password }) {
+      try {
+        const auth = await pb.collection('users').authWithPassword(email, password);
+        return { data: { user: auth.record }, error: null };
+      } catch (e) { return { data: null, error: e }; }
+    },
+    async signOut() { pb.authStore.clear(); return { error: null }; },
+    async getSession() {
+      const rec = pb.authStore.record;
+      const session = (pb.authStore.isValid && rec) ? { user: rec, access_token: pb.authStore.token } : null;
+      return { data: { session } };
+    }
+  }
+};
 
 let currentUser = null;
 let currentRole = 'responsable';
